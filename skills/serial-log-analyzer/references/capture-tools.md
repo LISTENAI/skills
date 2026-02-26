@@ -24,7 +24,74 @@ done
 
 ---
 
-## picocom (推荐)
+## ⚠️ 交互式 vs 非交互式使用场景
+
+**picocom / minicom / screen** 均为交互式 TTY 工具，**不能在非交互式 shell**（脚本、CI/CD、管道）中直接使用。
+
+| 场景 | 推荐工具 |
+|------|---------|
+| 手动调试（终端直连） | picocom / minicom / screen |
+| 脚本自动化 / CI | `stty` + `cat`、`python3 -m serial`、`socat` |
+| 长时间无人值守采集 | `ttylog`、`socat` |
+
+### 非交互式脚本捕获方案
+
+```bash
+# 方案1：stty + cat（无需额外依赖）
+stty -F /dev/ttyUSB0 115200 raw -echo
+cat /dev/ttyUSB0 > /tmp/serial.log &
+# 采集完成后 kill $!
+
+# 方案2：socat（更可控）
+socat /dev/ttyUSB0,b115200,raw,echo=0 - | tee /tmp/serial.log
+
+# 方案3：Python pyserial（跨平台，推荐 CI 场景）
+python3 -c "
+import serial, sys, time
+with serial.Serial('/dev/ttyUSB0', 115200, timeout=1) as s:
+    with open('/tmp/serial.log', 'wb') as f:
+        end = time.time() + 30  # 采集 30 秒
+        while time.time() < end:
+            data = s.read(1024)
+            if data:
+                f.write(data)
+                sys.stdout.buffer.write(data)
+"
+```
+
+安装 pyserial：`pip install pyserial`
+
+---
+
+## ⚠️ DTR 拉低与日志丢失问题
+
+> **重要**：打开串口时若不拉低 DTR，芯片不会重启，会错过启动阶段的关键日志。
+
+大多数嵌入式开发板使用 DTR 信号触发复位：
+
+```bash
+# picocom：连接时自动控制 DTR（默认行为）
+picocom --lower-dtr -b 115200 /dev/ttyUSB0
+
+# Python pyserial：手动控制 DTR 触发复位
+python3 -c "
+import serial, time
+s = serial.Serial('/dev/ttyUSB0', 115200)
+s.dtr = False   # 拉低 DTR → 触发复位
+time.sleep(0.1)
+s.dtr = True    # 释放
+# 现在开始读取完整启动日志
+"
+
+# stty：通过 -hupcl 选项控制
+stty -F /dev/ttyUSB0 115200 -hupcl
+```
+
+> 💡 如果总是丢失启动日志，优先检查 DTR 控制是否正确。
+
+---
+
+## picocom (交互式推荐)
 
 ```bash
 # 基本连接
