@@ -9,5 +9,11 @@
     "version": "1.0.0",
     "repository": "https://github.com/LISTENAI/skills"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "serial-log-analyzer",
+      "description": "Capture and analyze serial port logs from embedded devices to detect errors, warnings, and anomalies. Maps log entries back to source code for root cause analysis.",
+      "path": "skills/serial-log-analyzer"
+    }
+  ]
 }
