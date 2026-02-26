@@ -9,5 +9,15 @@
     "version": "1.0.0",
     "repository": "https://github.com/LISTENAI/skills"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "arcs-dev-tools",
+      "description": "ARCS SDK toolchain ops: clone repo, setup environment, build, flash, run, and read serial logs.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/arcs-dev-tools"
+      ]
+    }
+  ]
 }
