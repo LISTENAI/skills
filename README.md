@@ -41,7 +41,7 @@ Claude Code 用户也可通过 Marketplace 安装：
 
 | 技能 | 说明 |
 | ---- | ---- |
-| —    | 敬请期待 |
+| [serial-log-analyzer](skills/serial-log-analyzer/) | 捕获并分析串口日志，检测错误/警告/异常，映射到源码定位问题 |
 
 ## 技能工作原理
 
