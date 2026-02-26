@@ -1,0 +1,13 @@
+{
+  "name": "listenai-skills",
+  "owner": {
+    "name": "LISTENAI",
+    "url": "https://github.com/LISTENAI"
+  },
+  "metadata": {
+    "description": "LISTENAI's AI coding assistant skills collection",
+    "version": "1.0.0",
+    "repository": "https://github.com/LISTENAI/skills"
+  },
+  "plugins": []
+}
