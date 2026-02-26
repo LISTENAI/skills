@@ -1,8 +1,7 @@
-<p align="center">
-  <strong>LISTENAI Skills</strong>
-  <br>
-  <sub>聆思智能 AI 编码助手技能集</sub>
-</p>
+# LISTENAI Skills
+
+聆思智能 AI 编码助手技能集
+
 
 ## 安装
 
