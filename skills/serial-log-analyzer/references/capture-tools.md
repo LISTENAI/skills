@@ -1,5 +1,29 @@
 # Serial Log Capture Tools
 
+## 工具检测与安装
+
+在捕获日志前，先检测工具是否已安装：
+
+```bash
+# 检测可用工具
+for tool in picocom minicom screen ttylog; do
+  command -v $tool &>/dev/null && echo "✅ $tool" || echo "❌ $tool (未安装)"
+done
+```
+
+如果工具未安装，根据发行版提示安装：
+
+| 工具 | Arch Linux | Ubuntu/Debian | RHEL/CentOS |
+|------|-----------|---------------|-------------|
+| picocom | `sudo pacman -S picocom` | `sudo apt install picocom` | `sudo dnf install picocom` |
+| minicom | `sudo pacman -S minicom` | `sudo apt install minicom` | `sudo dnf install minicom` |
+| screen | `sudo pacman -S screen` | `sudo apt install screen` | `sudo dnf install screen` |
+| ttylog | AUR: `yay -S ttylog` | `sudo apt install ttylog` | — |
+
+> 💡 **AI 代理行为**：若用户系统中工具均未安装，优先推荐安装 `picocom`（最轻量）；若用户有 sudo 权限，可直接执行安装命令；若无权限，告知用户手动安装或联系管理员。无论如何，`screen` 通常是最普遍预装的工具，可优先尝试。
+
+---
+
 ## picocom (推荐)
 
 ```bash
