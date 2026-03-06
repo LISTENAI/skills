@@ -208,9 +208,12 @@ ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null
 **检测与部署流程**：
 1. 检测 JLink 软件是否已安装（JLinkExe、JFlashExe、JLinkGDBServerCLExe、xvfb-run）
 2. 检测并部署 JLinkDevices 配置（`~/.config/SEGGER/JLinkDevices/Listenai.xml` + `Flashloader.elf`）
-3. 从模板生成运行时 `arcs.jflash`（替换 `{{SKILL_DIR}}` 和 `{{FIRMWARE_PATH}}` 占位符）
-4. 动态检测 JLink 硬件序列号
-5. 执行连接测试（JFlashExe 读取 flash 验证通畅）
+3. 检测目标核心（AP/CP）并选择对应 JLink Script，**告知用户当前调试的核心**
+4. 从模板生成运行时 `arcs.jflash`（替换 `{{SKILL_DIR}}` 和 `{{FIRMWARE_PATH}}` 占位符）
+5. 动态检测 JLink 硬件序列号
+6. 执行连接测试（JFlashExe 读取 flash 验证通畅）
+
+**核心选择**：ARCS 双核（AP+CP），通过 build 目录 `.config` 中的 `CONFIG_ARCS_AP_CORE`/`CONFIG_ARCS_CP_CORE` 自动判断。Debug AP 用 `jtagscan0`，debug CP 用 `jtagscan1`，烧录/读 Flash 始终用 `jtagscan0`。
 
 **ARCS JLink 接线**：PA01-SWDIO, PA00-SWCLK, GND, VTref(3.3V)。接口模式为 cJTAG (2-pin)。
 

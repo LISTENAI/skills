@@ -116,7 +116,48 @@ cp <skill_dir>/assets/jlink/Flashloader.elf ~/.config/SEGGER/JLinkDevices/Listen
 sed -i '/<\/DataBase>/i\\t<Device>\n\t\t<ChipInfo Vendor="ListenAI" Name="ARCS" Core="JLINK_CORE_RISC_V"\n\t\t\tWorkRAMAddr="0x20040000"\n\t\t\tWorkRAMSize="0x00020000" />\n\t\t<FlashBankInfo Name="QSPI Flash" BaseAddr="0x30000000" MaxSize="0x400000"\n\t\t\tLoader="ListenAI/Arcs/Flashloader.elf" LoaderType="FLASH_ALGO_TYPE_OPEN"\n\t\t\tAlwaysPresent="1" />\n\t</Device>' ~/.config/SEGGER/JLinkDevices/Listenai.xml
 ```
 
-## 步骤 3：准备 JFlash 项目文件
+## 步骤 3：确定目标核心（AP/CP）并选择 JLink Script
+
+ARCS 是双核芯片（AP + CP），不同核心使用不同的 JTAG TAP 位置，**必须选择正确的 JLink Script**。
+
+### 3.1 JLink Script 选择规则
+
+| 操作 | JLink Script | 说明 |
+|------|-------------|------|
+| Debug AP 核心 | `jtagscan0.JLinkScript` | AP 在 JTAG chain 的 TAP0 位置 |
+| Debug CP 核心 | `jtagscan1.JLinkScript` | CP 在 JTAG chain 的 TAP1 位置 |
+| 烧录固件 | `jtagscan0.JLinkScript` | 始终通过 TAP0 |
+| 读取 Flash | `jtagscan0.JLinkScript` | 始终通过 TAP0 |
+| 读取寄存器 | `jtagscan0.JLinkScript` | 始终通过 TAP0 |
+
+> **简单记忆**：只有 debug CP 核心时用 `jtagscan1`，其他一律用 `jtagscan0`。
+
+### 3.2 自动检测目标核心
+
+从 build 目录的 `.config` 文件自动判断当前编译的是哪个核心：
+
+```bash
+# 检测 build 目录中的 .config
+grep -E "CONFIG_ARCS_(AP|CP)_CORE=y" <build_dir>/.config
+```
+
+| .config 内容 | 目标核心 | Debug 用 JLink Script |
+|-------------|---------|----------------------|
+| `CONFIG_ARCS_AP_CORE=y` | AP | `jtagscan0.JLinkScript` |
+| `CONFIG_ARCS_CP_CORE=y` | CP | `jtagscan1.JLinkScript` |
+
+**检测失败时**（.config 不存在或无匹配项）→ **询问用户**：当前要调试的是 AP 核心还是 CP 核心？
+
+### 3.3 提示用户确认
+
+检测到目标核心后，**必须告知用户当前调试的核心**：
+
+- AP 核心 → "当前编译目标为 **AP 核心**，将使用 jtagscan0.JLinkScript"
+- CP 核心 → "当前编译目标为 **CP 核心**，debug 将使用 jtagscan1.JLinkScript"
+
+> 烧录/读 Flash 等非 debug 操作始终使用 `jtagscan0.JLinkScript`，无需区分核心。
+
+## 步骤 4：准备 JFlash 项目文件
 
 arcs.jflash 模板位于 `<skill_dir>/assets/jlink/arcs.jflash`，包含两个占位符：
 
@@ -135,9 +176,10 @@ sed \
     <skill_dir>/assets/jlink/arcs.jflash > /tmp/arcs_runtime.jflash
 ```
 
+> arcs.jflash 模板中 ScriptFile 默认为 `jtagscan0.JLinkScript`（适用于烧录/读 Flash）。
 > 每次使用前都从模板重新生成，避免残留上次的路径。
 
-## 步骤 4：动态检测 JLink 序列号
+## 步骤 5：动态检测 JLink 序列号
 
 ```bash
 echo "ShowEmuList" | JLinkExe -NoGui 1 2>/dev/null | grep -oP 'Serial number: \K[0-9]+'
@@ -150,7 +192,7 @@ echo "ShowEmuList" | JLinkExe -NoGui 1 2>/dev/null | grep -oP 'Serial number: \K
   2. 检查 `lsusb | grep -i segger`
   3. 检查 udev 权限（用户是否在 `plugdev` 组）
 
-## 步骤 5：连接测试
+## 步骤 6：连接测试
 
 使用 JFlashExe 读取 flash 的一小段数据验证 JLink → ARCS 连接通畅：
 
@@ -204,10 +246,12 @@ xvfb-run -a JFlashExe \
    ↓ 缺失则提示安装
 2. 检测 JLinkDevices 配置（Listenai.xml + Flashloader.elf）
    ↓ 缺失则自动部署
-3. 生成运行时 arcs.jflash（从模板替换占位符）
-4. 检测 JLink 硬件序列号
+3. 检测目标核心（AP/CP）→ 选择对应 JLink Script
+   ↓ 告知用户当前调试的核心
+4. 生成运行时 arcs.jflash（从模板替换占位符）
+5. 检测 JLink 硬件序列号
    ↓ 未找到则提示连接硬件
-5. 执行连接测试（JFlashExe 读取 flash）
+6. 执行连接测试（JFlashExe 读取 flash）
    ↓ 成功 → "JLink 连接 ARCS 成功"
    ↓ 失败 → 输出错误信息和排查建议
 ```
