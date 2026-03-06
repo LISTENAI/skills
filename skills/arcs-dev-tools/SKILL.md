@@ -1,6 +1,6 @@
 ---
 name: arcs-dev-tools
-description: 当用户提到 ARCS/arcs-sdk、交叉编译工具链（riscv64-unknown-elf-gcc）、cskburn、烧录、/dev/ttyACM*、串口日志等任务时使用：负责拉取仓库、环境安装、编译、烧录、运行与日志读取；不负责代码编写/理解，代码开发由 Claude Code 本身负责
+description: 当用户提到 ARCS/arcs-sdk、交叉编译工具链（riscv64-unknown-elf-gcc）、cskburn、烧录、/dev/ttyACM*、串口日志、JLink、JFlash、GDB 调试、JTAG/cJTAG、debug、调试、断点、单步执行等任务时使用：负责拉取仓库、环境安装、编译、烧录、运行、日志读取与 JLink 调试环境部署；不负责代码编写/理解，代码开发由 Claude Code 本身负责
 license: MIT
 ---
 
@@ -113,6 +113,27 @@ bash ./build.sh -C -DBOARD=arcs_evb && bash ./build.sh -r -w -DBOARD=arcs_evb
 - 在 `build/` 下查找 `.bin` 文件
 - 返回固件文件的完整路径和大小
 
+**ARCS 编译产物命名规则**：
+- `build/<name>.bin` — 固件文件（用于烧录）
+- `build/<name>` — **ELF 文件（无后缀）**，用于 GDB 调试，包含调试符号
+- 例如：`build/helloworld.bin` 对应的 ELF 是 `build/helloworld`
+- **ELF 文件没有 `.elf` 后缀**，不要去找 `*.elf`，直接用去掉 `.bin` 后的同名无后缀文件
+
+**ARCS 启动顺序与 build 目录结构**：
+
+芯片启动顺序：`ROM_BOOT → AP 固件 (boot) → CP 固件 (应用)`
+
+如果 `build/` 下存在 `boot/` 子目录：
+- `build/boot/boot.bin` — AP 核心的 boot 固件
+- `build/boot/boot` — AP boot 的 ELF（无后缀），debug AP 时用此文件
+- `build/<name>.bin` — **已合并 boot 的完整固件**（= `boot.bin` + 应用 bin），直接烧录即可
+- `build/<name>.bin.without.boot` — 不含 boot 的纯应用固件
+- `build/<name>` — CP 应用的 ELF（无后缀），debug CP 时用此文件
+
+**GDB 调试时选择正确的 ELF**：
+- Debug AP (boot) → 用 `build/boot/boot`
+- Debug CP (应用) → 用 `build/<name>`
+
 ### 操作 4：烧录
 
 **输入**：固件文件路径
@@ -189,7 +210,7 @@ python3 <skill_dir>/serial_read.py <串口设备> -b 921600 -t <读取秒数>
 
 **日志返回给 Claude Code**，由 Claude Code 判断程序是否正常运行。
 
-### 操作 6：检查硬件连接
+### 操作 6：检查硬件连接（串口）
 
 独立操作，可在任意时刻调用。
 
@@ -200,6 +221,44 @@ ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null
 - 找到唯一设备 → 返回设备路径
 - 找到多个 → `udevadm info` 识别后询问用户
 - 找不到 → `lsusb` + `dmesg | tail -20` 后告知用户
+
+### 操作 7：JLink 环境检测与部署
+
+当用户需要通过 JLink 调试 ARCS 芯片时执行。详细步骤见 `<skill_dir>/references/jlink-setup.md`。
+
+**检测与部署流程**：
+1. 检测 JLink 软件是否已安装（JLinkExe、JLinkGDBServerCLExe）
+2. 检测并部署 JLinkDevices 配置（`~/.config/SEGGER/JLinkDevices/Listenai.xml` + `Flashloader.elf`）
+3. 检测目标核心（AP/CP）并选择对应 JLink Script，**告知用户当前调试的核心**
+4. 动态检测 JLink 硬件序列号
+5. 执行连接测试（**JLinkExe** 纯 CLI 读取 flash 验证通畅，不要使用 JFlashExe 避免弹出 GUI）
+
+**核心选择**：ARCS 双核（AP+CP），通过 build 目录 `.config` 中的 `CONFIG_ARCS_AP_CORE`/`CONFIG_ARCS_CP_CORE` 自动判断。Debug AP 用 `jtagscan0`，debug CP 用 `jtagscan1`，烧录/读 Flash 始终用 `jtagscan0`。
+
+**ARCS JLink 接线**：PA01-SWDIO, PA00-SWCLK, GND, VTref(3.3V)。接口模式为 cJTAG (2-pin)。
+
+**资源文件**：`<skill_dir>/assets/jlink/` 下包含 Flashloader.elf、arcs.jflash 模板、JLinkScript 文件。
+
+## 调试策略：JLink GDB 优先
+
+当用户提到"debug"、"调试"、"断点"、"单步"、"崩溃"、"卡死"、"排查问题"等关键词时，**优先使用 JLink GDB 调试**，而非串口日志。
+
+### 调试方法优先级
+
+1. **JLink GDB 调试**（首选）— 可设断点、单步执行、查看变量和寄存器、精确定位问题
+2. **串口日志读取**（备选）— 仅当 JLink 环境不可用时使用
+
+### 选择逻辑
+
+```
+用户提到 debug/调试/排查问题
+  → 检查 JLink 环境是否就绪（操作 7）
+    → 就绪 → 使用 JLink GDB 调试（流水线 C）
+    → 未就绪 → 尝试部署 JLink 环境（操作 7）
+      → 部署成功 → 使用 JLink GDB 调试
+      → 无法部署（无 JLink 硬件等）→ 降级为串口日志（流水线 A/B）
+        → 告知用户："当前使用串口日志排查，建议连接 JLink 以获得更精确的调试能力"
+```
 
 ## 常用流水线
 
@@ -223,11 +282,44 @@ Claude Code 调用顺序：
 5. **日志读取**（操作 5）
 6. Claude Code 判断是否符合预期 → 不符合则改代码 → 回到步骤 3（循环）
 
+### 流水线 C：JLink GDB 调试
+
+当用户需要 debug/调试时，**优先使用此流水线**：
+
+Claude Code 调用顺序：
+1. **JLink 环境检测**（操作 7）→ 未就绪则自动部署
+2. **编译**（操作 3）→ 定位 ELF 文件：`build/<name>`（**无后缀**，不是 `.elf`），确认带调试信息（`with debug_info, not stripped`）
+3. **检测目标核心**（AP/CP）→ 选择对应 JLink Script
+4. **启动 JLinkGDBServer**：
+   ```bash
+   JLinkGDBServerCLExe -device ARCS -if cJTAG -speed 4000 -port 2331 \
+       -USB <serial_number> -nogui -noir -nologtofile \
+       -JLinkScriptFile <jtagscan_script> &
+   ```
+   > **设备名必须用 `ARCS`**，不能用 `ListenAI ARCS`（会卡死）
+5. **GDB 连接并调试**：
+   ```bash
+   <riscv-gdb> -batch -x <gdb_commands_file> <elf_file>
+   ```
+   GDB 命令文件示例：
+   ```
+   set pagination off
+   set confirm off
+   target remote localhost:2331
+   monitor reset
+   monitor halt
+   load
+   break main
+   continue
+   ```
+6. 根据调试目标设置断点、单步执行、查看变量
+7. 调试完成后关闭 GDBServer 进程
+
 ## 经验知识库
 
 文件：`<skill_dir>/references/knowledge.md`
 
-按 5 个 topic 组织：**仓库管理 / 环境安装 / 编译 / 烧录 / 串口**。遇到问题时只读对应 topic。
+按 6 个 topic 组织：**仓库管理 / 环境安装 / 编译 / 烧录 / 串口 / JLink**。遇到问题时只读对应 topic。
 
 > 本文件由维护者手动维护，**模型不要修改**。
 

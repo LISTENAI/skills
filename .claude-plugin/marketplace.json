@@ -12,7 +12,7 @@
   "plugins": [
     {
       "name": "arcs-dev-tools",
-      "description": "ARCS SDK toolchain ops: clone repo, setup environment, build, flash, run, and read serial logs.",
+      "description": "ARCS SDK toolchain ops: clone repo, setup environment, build, flash, run, read serial logs, and JLink debug setup.",
       "source": "./",
       "strict": false,
       "skills": [

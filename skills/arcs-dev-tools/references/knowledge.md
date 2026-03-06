@@ -1,7 +1,7 @@
 # 经验知识库
 
 > 用于快速诊断。执行前按需读取对应 topic。本文件内容由维护者手动维护，**模型不要修改本文件**。
-> topic：仓库管理 / 环境安装 / 编译 / 烧录 / 串口 / 代码调试
+> topic：仓库管理 / 环境安装 / 编译 / 烧录 / 串口 / 代码调试 / JLink
 
 ---
 
@@ -70,8 +70,33 @@
 
 （暂无记录）
 
-
-
-
 ---
 
+## Topic 5: JLink
+
+### 5-1. JLink 无法识别 ARCS 芯片
+- **现象**: JFlashExe 报 `Could not find device` 或 `Unknown device`
+- **原因**: `~/.config/SEGGER/JLinkDevices/Listenai.xml` 缺失或缺少 ARCS 条目
+- **解决**: 执行操作 7（JLink 环境检测与部署），自动部署 JLinkDevices 配置
+
+### 5-2. VTref too low
+- **现象**: JLink 报 `VTref too low` 或 `Could not connect`
+- **原因**: JLink 的 VTref 引脚未接到目标板 3.3V，或目标板未上电
+- **解决**: 确认 VTref 接到 3.3V，确认目标板已上电
+
+### 5-3. 不要使用 JFlashExe 进行连接测试
+- **现象**: JFlashExe 弹出图形界面，或在无头环境报 `no display`
+- **原因**: JFlashExe 是 GUI 程序，即使有 xvfb-run 也可能在桌面环境弹窗
+- **解决**: 连接测试和 flash 读取统一使用 `JLinkExe`（纯 CLI），参见 `jlink-setup.md` 步骤 6
+
+### 5-4. JLink Script 文件找不到
+- **现象**: JFlash 日志报 `Script file not found`
+- **原因**: arcs.jflash 中的 ScriptFile 路径不正确
+- **解决**: 检查从模板生成 jflash 文件时 `{{SKILL_DIR}}` 占位符是否被正确替换为技能目录绝对路径
+
+### 5-5. ARCS JLink 接线
+- **接口**: cJTAG (2-pin)，TargetIF=7
+- **接线**: PA01-SWDIO, PA00-SWCLK, GND, VTref(3.3V)
+- **注意**: 必须接 VTref，JLink 依赖此引脚检测目标电压
+
+---
