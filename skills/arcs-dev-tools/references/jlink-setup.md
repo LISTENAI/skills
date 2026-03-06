@@ -1,0 +1,213 @@
+# JLink ARCS 环境检测与部署
+
+本文档指导 Claude Code 完成 ARCS 芯片的 JLink 调试环境检测与自动部署。
+
+## 接线说明
+
+ARCS 使用 **cJTAG (2-pin)** 接口连接 JLink：
+
+| JLink Pin | ARCS Pin | 功能 |
+|-----------|----------|------|
+| SWDIO     | PA01     | cJTAG 数据线 |
+| SWCLK     | PA00     | cJTAG 时钟线 |
+| GND       | GND      | 地线 |
+| VTref     | 3.3V     | 参考电压（必须接） |
+
+> **VTref 必须接**，JLink 依赖此引脚检测目标电压。未接会导致无法识别目标。
+
+## 步骤 1：检测 JLink 软件
+
+### 1.1 检测核心工具
+
+```bash
+which JLinkExe && which JFlashExe && which JLinkGDBServerCLExe
+```
+
+- **全部存在** → 已安装，获取版本：
+  ```bash
+  JLinkExe -? 2>&1 | head -2
+  ```
+- **缺失** → 提示用户安装
+
+### 1.2 安装指引
+
+| 发行版 | 安装方式 |
+|--------|---------|
+| Arch Linux | `yay -S jlink` 或 `paru -S jlink` |
+| Ubuntu/Debian | 从 SEGGER 官网下载 `.deb` 包安装 |
+| 其他 Linux | 从 SEGGER 官网下载通用安装包 |
+
+官网下载地址：https://www.segger.com/downloads/jlink/
+
+### 1.3 检测 xvfb-run
+
+JFlashExe 是 GUI 程序，在无头环境下需要 `xvfb-run`：
+
+```bash
+which xvfb-run
+```
+
+缺失时安装：
+- Arch: `sudo pacman -S xorg-server-xvfb`
+- Debian/Ubuntu: `sudo apt install xvfb`
+
+## 步骤 2：检测并部署 JLinkDevices 配置
+
+JLink 需要设备描述文件才能识别 ARCS 芯片。
+
+### 2.1 检测逻辑
+
+按顺序检查以下三项：
+
+```bash
+# 1. Listenai.xml 是否存在
+test -f ~/.config/SEGGER/JLinkDevices/Listenai.xml
+
+# 2. 是否包含 ARCS 条目
+grep -q 'Name="ARCS"' ~/.config/SEGGER/JLinkDevices/Listenai.xml
+
+# 3. Flashloader.elf 是否存在
+test -f ~/.config/SEGGER/JLinkDevices/ListenAI/Arcs/Flashloader.elf
+```
+
+三项全部通过 → 跳过部署。任一失败 → 执行部署。
+
+### 2.2 部署流程
+
+**第一步：创建目录并复制 Flashloader**
+
+```bash
+mkdir -p ~/.config/SEGGER/JLinkDevices/ListenAI/Arcs/
+cp <skill_dir>/assets/jlink/Flashloader.elf ~/.config/SEGGER/JLinkDevices/ListenAI/Arcs/
+```
+
+**第二步：处理 Listenai.xml**
+
+情况 A — 文件不存在，创建新文件：
+
+```xml
+<DataBase>
+	<Device>
+		<ChipInfo Vendor="ListenAI" Name="ARCS" Core="JLINK_CORE_RISC_V"
+			WorkRAMAddr="0x20040000"
+			WorkRAMSize="0x00020000" />
+		<FlashBankInfo Name="QSPI Flash" BaseAddr="0x30000000" MaxSize="0x400000"
+			Loader="ListenAI/Arcs/Flashloader.elf" LoaderType="FLASH_ALGO_TYPE_OPEN"
+			AlwaysPresent="1" />
+	</Device>
+</DataBase>
+```
+
+情况 B — 文件存在但缺少 ARCS 条目，在 `</DataBase>` 前插入：
+
+```xml
+	<Device>
+		<ChipInfo Vendor="ListenAI" Name="ARCS" Core="JLINK_CORE_RISC_V"
+			WorkRAMAddr="0x20040000"
+			WorkRAMSize="0x00020000" />
+		<FlashBankInfo Name="QSPI Flash" BaseAddr="0x30000000" MaxSize="0x400000"
+			Loader="ListenAI/Arcs/Flashloader.elf" LoaderType="FLASH_ALGO_TYPE_OPEN"
+			AlwaysPresent="1" />
+	</Device>
+```
+
+使用 `sed` 插入示例：
+```bash
+sed -i '/<\/DataBase>/i\\t<Device>\n\t\t<ChipInfo Vendor="ListenAI" Name="ARCS" Core="JLINK_CORE_RISC_V"\n\t\t\tWorkRAMAddr="0x20040000"\n\t\t\tWorkRAMSize="0x00020000" />\n\t\t<FlashBankInfo Name="QSPI Flash" BaseAddr="0x30000000" MaxSize="0x400000"\n\t\t\tLoader="ListenAI/Arcs/Flashloader.elf" LoaderType="FLASH_ALGO_TYPE_OPEN"\n\t\t\tAlwaysPresent="1" />\n\t</Device>' ~/.config/SEGGER/JLinkDevices/Listenai.xml
+```
+
+## 步骤 3：准备 JFlash 项目文件
+
+arcs.jflash 模板位于 `<skill_dir>/assets/jlink/arcs.jflash`，包含两个占位符：
+
+| 占位符 | 说明 | 替换示例 |
+|--------|------|---------|
+| `{{SKILL_DIR}}` | 技能安装目录的绝对路径 | `/home/user/.claude/skills/arcs-dev-tools` |
+| `{{FIRMWARE_PATH}}` | 固件文件的绝对路径 | `/home/user/arcs-sdk/build/arcs.bin` |
+
+**生成运行时 jflash 文件**：
+
+```bash
+# 从模板生成运行时文件（一次性替换所有占位符）
+sed \
+    -e "s|{{SKILL_DIR}}|<skill_dir 的绝对路径>|g" \
+    -e "s|{{FIRMWARE_PATH}}|<固件文件绝对路径>|g" \
+    <skill_dir>/assets/jlink/arcs.jflash > /tmp/arcs_runtime.jflash
+```
+
+> 每次使用前都从模板重新生成，避免残留上次的路径。
+
+## 步骤 4：动态检测 JLink 序列号
+
+```bash
+echo "ShowEmuList" | JLinkExe -NoGui 1 2>/dev/null | grep -oP 'Serial number: \K[0-9]+'
+```
+
+- **找到 1 个** → 自动使用该序列号
+- **找到多个** → 列出所有序列号，询问用户选择
+- **找不到** → 提示用户：
+  1. 确认 JLink 硬件已通过 USB 连接
+  2. 检查 `lsusb | grep -i segger`
+  3. 检查 udev 权限（用户是否在 `plugdev` 组）
+
+## 步骤 5：连接测试
+
+使用 JFlashExe 读取 flash 的一小段数据验证 JLink → ARCS 连接通畅：
+
+```bash
+xvfb-run -a JFlashExe \
+    -openprj/tmp/arcs_runtime.jflash \
+    -USB <serial_number> \
+    -readrange0x30000000,0x30000063 \
+    -saveas/tmp/arcs_flash_test.bin,0x30000000,0x30000063 \
+    -jflashlog/tmp/jflash_test.log \
+    -jlinklog/tmp/jlink_test.log \
+    -exit
+```
+
+### 判断标准
+
+**成功**：
+- 退出码为 0
+- `/tmp/arcs_flash_test.bin` 文件生成且大小为 100 字节 (0x63 - 0x00 + 1 = 100)
+- 日志中无 `Error` 或 `Could not connect`
+
+**失败处理**：
+
+| 错误关键词 | 原因 | 解决方案 |
+|-----------|------|---------|
+| `Could not connect to target` | 接线问题或芯片未上电 | 检查 PA01-SWDIO、PA00-SWCLK、GND、VTref 接线 |
+| `No J-Link found` | JLink 未连接或驱动问题 | `lsusb \| grep SEGGER`，检查 USB 连接 |
+| `VTref too low` | VTref 未接或目标未上电 | 确认 VTref 接到 3.3V，目标板已上电 |
+| `Could not find device` | JLinkDevices 配置缺失 | 重新执行步骤 2 |
+| `Failed to open project` | jflash 文件路径错误 | 检查占位符替换是否正确 |
+| `Script file not found` | JLinkScript 路径错误 | 检查 `{{SKILL_DIR}}` 替换是否正确 |
+
+> 失败时读取 `/tmp/jflash_test.log` 和 `/tmp/jlink_test.log` 获取详细错误信息。
+
+## 重要：设备名差异
+
+不同 JLink 工具使用的设备名不同，**必须严格遵守**：
+
+| 工具 | 设备名参数 | 正确值 |
+|------|-----------|--------|
+| JFlashExe | arcs.jflash 中 `ChipName` | `ListenAI ARCS` |
+| JLinkGDBServerCLExe | `-device` 参数 | `ARCS` |
+| JLinkExe | `device` 命令 | `ARCS` |
+
+> **`JLinkGDBServerCLExe -device "ListenAI ARCS"` 会导致连接 Target 时无限卡死**。必须使用短名 `ARCS`。
+
+## 完整流程摘要
+
+```
+1. 检测 JLinkExe / JFlashExe / JLinkGDBServerCLExe / xvfb-run
+   ↓ 缺失则提示安装
+2. 检测 JLinkDevices 配置（Listenai.xml + Flashloader.elf）
+   ↓ 缺失则自动部署
+3. 生成运行时 arcs.jflash（从模板替换占位符）
+4. 检测 JLink 硬件序列号
+   ↓ 未找到则提示连接硬件
+5. 执行连接测试（JFlashExe 读取 flash）
+   ↓ 成功 → "JLink 连接 ARCS 成功"
+   ↓ 失败 → 输出错误信息和排查建议
+```

@@ -1,6 +1,6 @@
 ---
 name: arcs-dev-tools
-description: 当用户提到 ARCS/arcs-sdk、交叉编译工具链（riscv64-unknown-elf-gcc）、cskburn、烧录、/dev/ttyACM*、串口日志等任务时使用：负责拉取仓库、环境安装、编译、烧录、运行与日志读取；不负责代码编写/理解，代码开发由 Claude Code 本身负责
+description: 当用户提到 ARCS/arcs-sdk、交叉编译工具链（riscv64-unknown-elf-gcc）、cskburn、烧录、/dev/ttyACM*、串口日志、JLink、JFlash、GDB 调试、JTAG/cJTAG 等任务时使用：负责拉取仓库、环境安装、编译、烧录、运行、日志读取与 JLink 调试环境部署；不负责代码编写/理解，代码开发由 Claude Code 本身负责
 license: MIT
 ---
 
@@ -189,7 +189,7 @@ python3 <skill_dir>/serial_read.py <串口设备> -b 921600 -t <读取秒数>
 
 **日志返回给 Claude Code**，由 Claude Code 判断程序是否正常运行。
 
-### 操作 6：检查硬件连接
+### 操作 6：检查硬件连接（串口）
 
 独立操作，可在任意时刻调用。
 
@@ -200,6 +200,21 @@ ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null
 - 找到唯一设备 → 返回设备路径
 - 找到多个 → `udevadm info` 识别后询问用户
 - 找不到 → `lsusb` + `dmesg | tail -20` 后告知用户
+
+### 操作 7：JLink 环境检测与部署
+
+当用户需要通过 JLink 调试 ARCS 芯片时执行。详细步骤见 `<skill_dir>/references/jlink-setup.md`。
+
+**检测与部署流程**：
+1. 检测 JLink 软件是否已安装（JLinkExe、JFlashExe、JLinkGDBServerCLExe、xvfb-run）
+2. 检测并部署 JLinkDevices 配置（`~/.config/SEGGER/JLinkDevices/Listenai.xml` + `Flashloader.elf`）
+3. 从模板生成运行时 `arcs.jflash`（替换 `{{SKILL_DIR}}` 和 `{{FIRMWARE_PATH}}` 占位符）
+4. 动态检测 JLink 硬件序列号
+5. 执行连接测试（JFlashExe 读取 flash 验证通畅）
+
+**ARCS JLink 接线**：PA01-SWDIO, PA00-SWCLK, GND, VTref(3.3V)。接口模式为 cJTAG (2-pin)。
+
+**资源文件**：`<skill_dir>/assets/jlink/` 下包含 Flashloader.elf、arcs.jflash 模板、JLinkScript 文件。
 
 ## 常用流水线
 
@@ -227,7 +242,7 @@ Claude Code 调用顺序：
 
 文件：`<skill_dir>/references/knowledge.md`
 
-按 5 个 topic 组织：**仓库管理 / 环境安装 / 编译 / 烧录 / 串口**。遇到问题时只读对应 topic。
+按 6 个 topic 组织：**仓库管理 / 环境安装 / 编译 / 烧录 / 串口 / JLink**。遇到问题时只读对应 topic。
 
 > 本文件由维护者手动维护，**模型不要修改**。
 
