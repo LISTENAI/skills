@@ -41,7 +41,7 @@ Claude Code 用户也可通过 Marketplace 安装：
 
 | 技能 | 说明 |
 | ---- | ---- |
-| `arcs-dev-tools` | ARCS SDK 工具链操作：拉取仓库、环境安装、编译、烧录、运行与串口日志读取 |
+| `arcs-dev-tools` | ARCS SDK 工具链操作：拉取仓库、环境安装、编译、烧录、运行、串口日志读取与 JLink 调试环境部署 |
 
 ## 技能工作原理
 
