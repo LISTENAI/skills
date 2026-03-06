@@ -69,24 +69,41 @@ git submodule update --init --recursive
 
 ### 操作 2：安装开发环境
 
-首次使用或工具链缺失时执行。需要运行**两个**安装脚本：
+首次使用或工具链缺失时执行。**但必须先检查环境变量，用户可能已自行配置工具链路径。**
+
+**优先检查环境变量**：
 
 ```bash
-# 1. 安装构建工具（cmake、ninja 等）
+# 检查用户是否已指定工具链路径
+echo "NUCLEI_TOOLCHAIN_PATH=$NUCLEI_TOOLCHAIN_PATH"
+echo "LISTENAI_TOOLS_PATH=$LISTENAI_TOOLS_PATH"
+```
+
+| 环境变量 | 含义 | 设置后跳过 |
+|---------|------|-----------|
+| `NUCLEI_TOOLCHAIN_PATH` | 用户指定的 RISC-V GCC 工具链路径 | 跳过 `prepare_toolchain.sh` |
+| `LISTENAI_TOOLS_PATH` | 用户指定的 listenai-tools 路径（cmake、ninja 等） | 跳过 `prepare_listenai_tools.sh` |
+
+> **环境变量已设置时，不要运行对应的安装脚本**，直接使用用户指定的路径。
+
+**仅当环境变量未设置时**，才运行安装脚本：
+
+```bash
+# 1. 安装构建工具（仅当 LISTENAI_TOOLS_PATH 未设置时）
 bash prepare_listenai_tools.sh
 
-# 2. 安装 GCC 交叉编译工具链（riscv64-unknown-elf-gcc）
+# 2. 安装 GCC 交叉编译工具链（仅当 NUCLEI_TOOLCHAIN_PATH 未设置时）
 bash prepare_toolchain.sh
 
 # 3. 确保 cskburn 有执行权限
 chmod +x ./tools/burn/cskburn
 ```
 
-**检查项**：
-- `listenai-dev-tools/` 目录是否存在
-- `listenai-dev-tools/gcc/bin/riscv64-unknown-elf-gcc` 是否可执行
-- `listenai-dev-tools/listenai-tools/cmake/bin/cmake` 是否可执行
-- `./tools/burn/cskburn` 是否可执行
+**检查项**（按优先级）：
+1. 若 `NUCLEI_TOOLCHAIN_PATH` 已设置 → 检查 `$NUCLEI_TOOLCHAIN_PATH/bin/riscv64-unknown-elf-gcc` 是否可执行
+2. 若 `LISTENAI_TOOLS_PATH` 已设置 → 检查 `$LISTENAI_TOOLS_PATH/cmake/bin/cmake` 是否可执行
+3. 若环境变量未设置 → 检查仓库内 `listenai-dev-tools/` 下的对应路径
+4. `./tools/burn/cskburn` 是否可执行
 
 如果检查通过，跳过安装。
 
@@ -238,6 +255,11 @@ ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null
 **ARCS JLink 接线**：PA01-SWDIO, PA00-SWCLK, GND, VTref(3.3V)。接口模式为 cJTAG (2-pin)。
 
 **资源文件**：`<skill_dir>/assets/jlink/` 下包含 Flashloader.elf、arcs.jflash 模板、JLinkScript 文件。
+
+> **严禁违反以下三条，否则必定连接失败：**
+> 1. **接口必须用 `-if cJTAG`**，不能用 `-if JTAG` 或 `-if SWD`
+> 2. **必须加载 JLinkScript**：`-JLinkScriptFile <skill_dir>/assets/jlink/jtagscan0.JLinkScript`（或 jtagscan1），不带 JLinkScript 会报 `Could not connect to target`
+> 3. **设备名必须用 `ARCS`**，不能用 `ListenAI ARCS`
 
 ## 调试策略：JLink GDB 优先
 
