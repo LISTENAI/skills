@@ -20,7 +20,7 @@ ARCS 使用 **cJTAG (2-pin)** 接口连接 JLink：
 ### 1.1 检测核心工具
 
 ```bash
-which JLinkExe && which JFlashExe && which JLinkGDBServerCLExe
+which JLinkExe && which JLinkGDBServerCLExe
 ```
 
 - **全部存在** → 已安装，获取版本：
@@ -39,17 +39,8 @@ which JLinkExe && which JFlashExe && which JLinkGDBServerCLExe
 
 官网下载地址：https://www.segger.com/downloads/jlink/
 
-### 1.3 检测 xvfb-run
-
-JFlashExe 是 GUI 程序，在无头环境下需要 `xvfb-run`：
-
-```bash
-which xvfb-run
-```
-
-缺失时安装：
-- Arch: `sudo pacman -S xorg-server-xvfb`
-- Debian/Ubuntu: `sudo apt install xvfb`
+> **不要使用 JFlashExe 进行连接测试**。JFlashExe 是 GUI 程序，会弹出图形界面。
+> 连接测试和 flash 读取统一使用 `JLinkExe`（纯 CLI，无 GUI 依赖）。
 
 ## 步骤 2：检测并部署 JLinkDevices 配置
 
@@ -194,38 +185,38 @@ echo "ShowEmuList" | JLinkExe -NoGui 1 2>/dev/null | grep -oP 'Serial number: \K
 
 ## 步骤 6：连接测试
 
-使用 JFlashExe 读取 flash 的一小段数据验证 JLink → ARCS 连接通畅：
+使用 **JLinkExe**（纯 CLI，无 GUI）读取 flash 的一小段数据验证连接通畅：
 
 ```bash
-xvfb-run -a JFlashExe \
-    -openprj/tmp/arcs_runtime.jflash \
+echo -e "\n\n\nsavebin /tmp/arcs_flash_test.bin 0x30000000 0x64\nexit\n" | \
+    timeout 25 JLinkExe \
     -USB <serial_number> \
-    -readrange0x30000000,0x30000063 \
-    -saveas/tmp/arcs_flash_test.bin,0x30000000,0x30000063 \
-    -jflashlog/tmp/jflash_test.log \
-    -jlinklog/tmp/jlink_test.log \
-    -exit
+    -NoGui 1 \
+    -Device ARCS \
+    -IF cJTAG \
+    -Speed 4000 \
+    -AutoConnect 1 \
+    -JLinkScriptFile <skill_dir>/assets/jlink/jtagscan0.JLinkScript \
+    2>&1
 ```
+
+> **说明**：前面的 `\n\n\n` 用于跳过 JLinkExe 的交互式 prompt（IRPre/DRPre 位置确认），让它使用 JLinkScript 中配置的默认值。
 
 ### 判断标准
 
 **成功**：
-- 退出码为 0
-- `/tmp/arcs_flash_test.bin` 文件生成且大小为 100 字节 (0x63 - 0x00 + 1 = 100)
-- 日志中无 `Error` 或 `Could not connect`
+- 输出包含 `Reading 100 bytes from addr 0x30000000 into file...O.K.`
+- `/tmp/arcs_flash_test.bin` 文件生成且大小为 100 字节
 
 **失败处理**：
 
 | 错误关键词 | 原因 | 解决方案 |
 |-----------|------|---------|
 | `Could not connect to target` | 接线问题或芯片未上电 | 检查 PA01-SWDIO、PA00-SWCLK、GND、VTref 接线 |
+| `CPU-TAP not found in JTAG chain` | JLinkScript 未加载或路径错误 | 确认 `-JLinkScriptFile` 路径正确 |
 | `No J-Link found` | JLink 未连接或驱动问题 | `lsusb \| grep SEGGER`，检查 USB 连接 |
 | `VTref too low` | VTref 未接或目标未上电 | 确认 VTref 接到 3.3V，目标板已上电 |
 | `Could not find device` | JLinkDevices 配置缺失 | 重新执行步骤 2 |
-| `Failed to open project` | jflash 文件路径错误 | 检查占位符替换是否正确 |
-| `Script file not found` | JLinkScript 路径错误 | 检查 `{{SKILL_DIR}}` 替换是否正确 |
-
-> 失败时读取 `/tmp/jflash_test.log` 和 `/tmp/jlink_test.log` 获取详细错误信息。
 
 ## 重要：设备名差异
 

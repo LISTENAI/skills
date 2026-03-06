@@ -84,10 +84,10 @@
 - **原因**: JLink 的 VTref 引脚未接到目标板 3.3V，或目标板未上电
 - **解决**: 确认 VTref 接到 3.3V，确认目标板已上电
 
-### 5-3. JFlashExe 报 No display
-- **现象**: `Error: no display specified` 或 `cannot open display`
-- **原因**: JFlashExe 是 GUI 程序，无头环境下需要虚拟 X 服务
-- **解决**: 使用 `xvfb-run -a JFlashExe ...` 启动；安装 xvfb（Arch: `xorg-server-xvfb`，Debian: `xvfb`）
+### 5-3. 不要使用 JFlashExe 进行连接测试
+- **现象**: JFlashExe 弹出图形界面，或在无头环境报 `no display`
+- **原因**: JFlashExe 是 GUI 程序，即使有 xvfb-run 也可能在桌面环境弹窗
+- **解决**: 连接测试和 flash 读取统一使用 `JLinkExe`（纯 CLI），参见 `jlink-setup.md` 步骤 6
 
 ### 5-4. JLink Script 文件找不到
 - **现象**: JFlash 日志报 `Script file not found`
