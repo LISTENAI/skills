@@ -99,4 +99,18 @@
 - **接线**: PA01-SWDIO, PA00-SWCLK, GND, VTref(3.3V)
 - **注意**: 必须接 VTref，JLink 依赖此引脚检测目标电压
 
+### 5-6. CPU-TAP not found in JTAG chain
+- **现象**: JLinkGDBServerCLExe 或 JLinkExe 报 `ERROR: CPU-TAP not found in JTAG chain`
+- **原因**: 启动时未指定 `-JLinkScriptFile` 参数。ARCS 是双 TAP JTAG chain（AP + CP），没有 JLinkScript 定义各 TAP 的 IR/DR 位置，JLink 无法定位正确的 CPU TAP
+- **解决**: 所有 JLink 工具调用**必须**加上 `-JLinkScriptFile <skill_dir>/assets/jlink/jtagscan0.JLinkScript`（debug CP 时用 `jtagscan1.JLinkScript`）
+
+### 5-7. CPU could not be halted
+- **现象**: JTAG chain 识别正常（找到 2 个设备），但报 `CPU could not be halted` / `Timeout while waiting for core to halt after reset and halt request`
+- **原因**: 目标芯片处于异常运行状态，不响应调试 halt 请求
+- **解决**:
+  1. 按 RESET 键或断电重新上电后重试
+  2. 尝试 connect under reset：在 JLinkExe 中使用 `-AutoConnect 1` 参数
+  3. 检查 JTAG 接线信号质量（接线是否过长或松动）
+  4. 确认目标板固件未禁用调试接口
+
 ---
