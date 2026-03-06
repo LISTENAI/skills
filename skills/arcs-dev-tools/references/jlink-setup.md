@@ -217,6 +217,8 @@ echo -e "\n\n\nsavebin /tmp/arcs_flash_test.bin 0x30000000 0x64\nexit\n" | \
 | `No J-Link found` | JLink 未连接或驱动问题 | `lsusb \| grep SEGGER`，检查 USB 连接 |
 | `VTref too low` | VTref 未接或目标未上电 | 确认 VTref 接到 3.3V，目标板已上电 |
 | `Could not find device` | JLinkDevices 配置缺失 | 重新执行步骤 2 |
+| `CPU could not be halted` | 芯片处于异常状态，不响应 halt 请求 | 按 RESET 或断电重上电后重试；检查接线信号质量 |
+| `Timeout while waiting for core to halt` | 同上，halt 超时 | 同上；尝试加 `-AutoConnect 1` 参数 |
 
 ## 重要：设备名差异
 
@@ -233,7 +235,7 @@ echo -e "\n\n\nsavebin /tmp/arcs_flash_test.bin 0x30000000 0x64\nexit\n" | \
 ## 完整流程摘要
 
 ```
-1. 检测 JLinkExe / JFlashExe / JLinkGDBServerCLExe / xvfb-run
+1. 检测 JLinkExe / JLinkGDBServerCLExe
    ↓ 缺失则提示安装
 2. 检测 JLinkDevices 配置（Listenai.xml + Flashloader.elf）
    ↓ 缺失则自动部署
@@ -242,7 +244,7 @@ echo -e "\n\n\nsavebin /tmp/arcs_flash_test.bin 0x30000000 0x64\nexit\n" | \
 4. 生成运行时 arcs.jflash（从模板替换占位符）
 5. 检测 JLink 硬件序列号
    ↓ 未找到则提示连接硬件
-6. 执行连接测试（JFlashExe 读取 flash）
+6. 执行连接测试（JLinkExe 读取 flash，纯 CLI）
    ↓ 成功 → "JLink 连接 ARCS 成功"
    ↓ 失败 → 输出错误信息和排查建议
 ```

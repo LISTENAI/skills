@@ -313,6 +313,7 @@ Claude Code 调用顺序：
 2. **编译**（操作 3）→ 定位 ELF 文件：`build/<name>`（**无后缀**，不是 `.elf`），确认带调试信息（`with debug_info, not stripped`）
 3. **检测目标核心**（AP/CP）→ 选择对应 JLink Script
 4. **启动 JLinkGDBServer**：
+   > **⚠️ `-JLinkScriptFile` 是必填参数，缺少会导致 `CPU-TAP not found in JTAG chain`**
    ```bash
    JLinkGDBServerCLExe -device ARCS -if cJTAG -speed 4000 -port 2331 \
        -USB <serial_number> -nogui -noir -nologtofile \
