@@ -114,34 +114,83 @@ def serial_read(port, baudrate=921600, timeout=5, dtr=False, rts=False):
         os.close(fd)
 
 
-def main():
+def serial_reset(port):
+    """Reset the chip by toggling DTR signal on the serial port.
+
+    Sequence: setDTR(True) -> sleep(0.5) -> setDTR(False)
+
+    Args:
+        port: Device path (e.g., /dev/ttyACM0)
+    """
+    fd = os.open(port, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+    try:
+        _set_modem_signal(fd, TIOCM_DTR, True)
+        time.sleep(0.5)
+        _set_modem_signal(fd, TIOCM_DTR, False)
+        print(f"Chip reset via DTR on {port}")
+    finally:
+        os.close(fd)
+
+
+def _build_parser():
+    """Build the argument parser with read/reset subcommands."""
     parser = argparse.ArgumentParser(
-        description="Read serial port output (Python stdlib, no pyserial needed)"
+        description="Serial port tools (Python stdlib, no pyserial needed)"
     )
-    parser.add_argument("port", help="Serial device path (e.g., /dev/ttyACM0)")
-    parser.add_argument(
+    subparsers = parser.add_subparsers(dest="command")
+
+    # read subcommand
+    read_parser = subparsers.add_parser("read", help="Read serial port output")
+    read_parser.add_argument("port", help="Serial device path (e.g., /dev/ttyACM0)")
+    read_parser.add_argument(
         "-b", "--baudrate", type=int, default=921600, help="Baud rate (default: 921600)"
     )
-    parser.add_argument(
+    read_parser.add_argument(
         "-t", "--timeout", type=float, default=5, help="Read timeout in seconds (default: 5)"
     )
-    parser.add_argument(
+    read_parser.add_argument(
         "--dtr", action="store_true", help="Assert DTR high (default: pull low)"
     )
-    parser.add_argument(
+    read_parser.add_argument(
         "--rts", action="store_true", help="Assert RTS high (default: pull low)"
     )
 
-    args = parser.parse_args()
+    # reset subcommand
+    reset_parser = subparsers.add_parser(
+        "reset", help="Reset chip by toggling DTR signal"
+    )
+    reset_parser.add_argument("port", help="Serial device path (e.g., /dev/ttyACM0)")
+
+    return parser
+
+
+SUBCOMMANDS = {"read", "reset"}
+
+
+def main():
+    parser = _build_parser()
+
+    # Backward compatibility: if no subcommand given, default to "read"
+    argv = sys.argv[1:]
+    if argv and argv[0] not in SUBCOMMANDS and not argv[0].startswith("-"):
+        argv = ["read"] + argv
+
+    args = parser.parse_args(argv)
+    if args.command is None:
+        parser.print_help()
+        sys.exit(1)
 
     try:
-        serial_read(
-            port=args.port,
-            baudrate=args.baudrate,
-            timeout=args.timeout,
-            dtr=args.dtr,
-            rts=args.rts,
-        )
+        if args.command == "read":
+            serial_read(
+                port=args.port,
+                baudrate=args.baudrate,
+                timeout=args.timeout,
+                dtr=args.dtr,
+                rts=args.rts,
+            )
+        elif args.command == "reset":
+            serial_reset(port=args.port)
     except PermissionError:
         print(f"Error: Permission denied for {args.port}", file=sys.stderr)
         print("Hint: ensure user is in uucp/dialout group", file=sys.stderr)

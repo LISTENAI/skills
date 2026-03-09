@@ -199,8 +199,10 @@ Finished
 
 **使用 `serial_read.py`**（技能自带脚本，纯 Python stdlib，零外部依赖）：
 ```bash
-python3 <skill_dir>/serial_read.py <串口设备> -b 921600 -t <读取秒数>
+python3 <skill_dir>/serial_read.py read <串口设备> -b 921600 -t <读取秒数>
 ```
+
+> 兼容旧用法：不加 `read` 子命令也可以（自动识别为 read 模式）。
 
 > **`<skill_dir>`** 即本技能安装目录，与 SKILL.md 同级。
 
@@ -221,7 +223,7 @@ python3 <skill_dir>/serial_read.py <串口设备> -b 921600 -t <读取秒数>
 **串口问题处理**：
 - **乱码** → 确保波特率设置正确（921600），或等板子完全启动后再读
 - **设备断连** → 关闭连接 → 等 2-3 秒 → 重新扫描设备 → 重连
-- **无输出** → 提醒用户按 Reset 键，或重新烧录
+- **无输出** → 先尝试操作 7 复位芯片，仍无输出则提醒用户检查连接或重新烧录
 - **权限问题** → 确保用户在 uucp/dialout 组中
 - **设备占用** → 读取前检查是否有其他进程占用（fuser <串口设备>）
 
@@ -239,7 +241,29 @@ ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null
 - 找到多个 → `udevadm info` 识别后询问用户
 - 找不到 → `lsusb` + `dmesg | tail -20` 后告知用户
 
-### 操作 7：JLink 环境检测与部署
+### 操作 7：复位芯片
+
+通过烧录串口的 DTR 信号复位芯片，无需手动按 Reset 键。
+
+```bash
+python3 <skill_dir>/serial_read.py reset <串口设备>
+```
+
+**原理**：拉高 DTR → 等待 0.5 秒 → 拉低 DTR，触发芯片硬件复位。
+
+**使用场景**：
+- 烧录后需要复位芯片重新启动
+- 芯片卡死需要重启
+- 调试过程中需要重新运行程序
+
+**复位后读日志的典型组合**：
+```bash
+# 先复位，再立即读取启动日志
+python3 <skill_dir>/serial_read.py reset <串口设备> && \
+python3 <skill_dir>/serial_read.py read <串口设备> -b 921600 -t 5
+```
+
+### 操作 8：JLink 环境检测与部署
 
 当用户需要通过 JLink 调试 ARCS 芯片时执行。详细步骤见 `<skill_dir>/references/jlink-setup.md`。
 
@@ -274,9 +298,9 @@ ls /dev/ttyACM* /dev/ttyUSB* 2>/dev/null
 
 ```
 用户提到 debug/调试/排查问题
-  → 检查 JLink 环境是否就绪（操作 7）
+  → 检查 JLink 环境是否就绪（操作 8）
     → 就绪 → 使用 JLink GDB 调试（流水线 C）
-    → 未就绪 → 尝试部署 JLink 环境（操作 7）
+    → 未就绪 → 尝试部署 JLink 环境（操作 8）
       → 部署成功 → 使用 JLink GDB 调试
       → 无法部署（无 JLink 硬件等）→ 降级为串口日志（流水线 A/B）
         → 告知用户："当前使用串口日志排查，建议连接 JLink 以获得更精确的调试能力"
@@ -309,7 +333,7 @@ Claude Code 调用顺序：
 当用户需要 debug/调试时，**优先使用此流水线**：
 
 Claude Code 调用顺序：
-1. **JLink 环境检测**（操作 7）→ 未就绪则自动部署
+1. **JLink 环境检测**（操作 8）→ 未就绪则自动部署
 2. **编译**（操作 3）→ 定位 ELF 文件：`build/<name>`（**无后缀**，不是 `.elf`），确认带调试信息（`with debug_info, not stripped`）
 3. **检测目标核心**（AP/CP）→ 选择对应 JLink Script
 4. **启动 JLinkGDBServer**：
